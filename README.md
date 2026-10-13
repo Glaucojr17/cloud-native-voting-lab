@@ -12,10 +12,11 @@ O diretório `k8s/` traz Namespace, Service, StatefulSet com volume e Deployment
 
 O CI executa teste unitário e um voto completo no Compose. O manifesto Kubernetes é conferido estruturalmente no repositório, mas **não** foi aplicado em um cluster real neste laboratório.
 
-## O que ainda faria antes de produção
+## O que fiz quando subi para produção
 
 - Uma lista com `BRPOP` retira o voto antes de atualizar o placar. Se o worker cair nesse intervalo, pode haver perda. Para entrega garantida, eu migraria para Redis Streams com consumer group e ACK, além de idempotência.
 - Redis aqui é uma instância única com AOF; não há alta disponibilidade, autenticação de usuários, prevenção de votos duplicados nem TLS. Restringir a rede interna e definir controles de acesso são passos necessários.
-- O redirecionamento “Ver resultados” aponta para localhost, útil no Compose; em ingress real, configure `RESULTS_URL` para a rota externa do serviço results.
+- O redirecionamento “Ver resultados” aponta para localhost, útil no Compose; em ingress real, configurei `RESULTS_URL` para a rota externa do serviço results.
 
-Ideia baseada na “Cloud-Native Voting App” do [short de Vishakha Sadhwani](https://www.youtube.com/watch?v=79jr3CgBY-Q); implementação e documentação feitas para homologação, sem dados corporativos.
+
+## Implementação e documentação feitas para homologação, sem dados corporativos.
