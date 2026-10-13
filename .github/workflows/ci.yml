@@ -1,0 +1,25 @@
+name: Validar votação cloud native
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - run: npm test
+      - run: docker compose config --quiet
+      - uses: azure/setup-kubectl@v4
+        with: { version: 'v1.32.0' }
+      - run: kubectl kustomize k8s > /tmp/voting-rendered.yaml
+      - run: docker compose up -d --build --wait
+      - name: Votar e conferir processamento assíncrono
+        run: |
+          curl --fail --retry 5 --retry-delay 2 -X POST -H 'Content-Type: application/json' -d '{"choice":"aws"}' http://localhost:3000/vote
+          for i in $(seq 1 20); do
+            curl --fail -s http://localhost:3001/results | grep -q '"aws":1' && exit 0
+            sleep 1
+          done
+          exit 1
+      - if: always()
+        run: docker compose down --volumes

@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: voting-lab
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: [redis-server, --appendonly, 'yes']
+          ports: [{ containerPort: 6379 }]
+          readinessProbe: { exec: { command: [redis-cli, ping] }, initialDelaySeconds: 3, periodSeconds: 5 }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          volumeMounts: [{ name: data, mountPath: /data }]
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: 1Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: vote }
+spec:
+  selector: { app: vote }
+  ports: [{ port: 80, targetPort: 3000 }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: results }
+spec:
+  selector: { app: results }
+  ports: [{ port: 80, targetPort: 3001 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: vote }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: vote } }
+  template:
+    metadata: { labels: { app: vote } }
+    spec:
+      containers:
+        - name: vote
+          image: cloud-native-voting-lab:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3000 }]
+          env:
+            - { name: APP, value: vote }
+            - { name: REDIS_HOST, value: redis }
+            - { name: RESULTS_URL, value: 'http://localhost:3001/results' }
+          readinessProbe: { httpGet: { path: /health/ready, port: 3000 }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /health/live, port: 3000 }, periodSeconds: 10 }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 128Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: worker } }
+  template:
+    metadata: { labels: { app: worker } }
+    spec:
+      containers:
+        - name: worker
+          image: cloud-native-voting-lab:v1.0.0
+          imagePullPolicy: IfNotPresent
+          env: [{ name: APP, value: worker }, { name: REDIS_HOST, value: redis }]
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 128Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: results }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: results } }
+  template:
+    metadata: { labels: { app: results } }
+    spec:
+      containers:
+        - name: results
+          image: cloud-native-voting-lab:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3001 }]
+          env: [{ name: APP, value: results }, { name: REDIS_HOST, value: redis }]
+          readinessProbe: { httpGet: { path: /health/ready, port: 3001 }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /health/live, port: 3001 }, periodSeconds: 10 }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 128Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }

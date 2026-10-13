@@ -1,0 +1,25 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      retries: 10
+  vote:
+    build: .
+    environment: { APP: vote, REDIS_HOST: redis, RESULTS_URL: 'http://localhost:3001/results' }
+    ports: ['3000:3000']
+    depends_on: { redis: { condition: service_healthy } }
+  worker:
+    build: .
+    environment: { APP: worker, REDIS_HOST: redis }
+    depends_on: { redis: { condition: service_healthy } }
+  results:
+    build: .
+    environment: { APP: results, REDIS_HOST: redis }
+    ports: ['3001:3001']
+    depends_on: { redis: { condition: service_healthy } }
+volumes:
+  redis-data:
